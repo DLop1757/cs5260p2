@@ -1,5 +1,7 @@
 import random
+import numpy as np
 from itertools import chain, combinations
+
 
 class State(tuple):
 	# A state is defined as a tuple (numbers, dice_summation)
@@ -72,8 +74,6 @@ class Environment:
 			s += i
 		return s
 
-
-
 class Agent:
 	def __init__(self, env):
 		self.env = env
@@ -85,15 +85,44 @@ class Agent:
 		c = self.env.total_numbers
 		return c*(c+1)//2 - self.env.calc_sum(numbers_left)
 
+	# returns utility
 	def value_iteration(self):
-		max_change = 1e5
-		while max_change >= 0.001:
-			utilities_pre = self.utilities.copy() # Copy the utility, e.g. U_{t-1}
-			max_change = 0 # Measure the maximum change in all states for this iteration - if smaller than 0.001 we stop.
-			for state in self.all_states:
-				# Complete this part with follwoing functions 
-				# self.giveup_reward, self.env.available_actions, self.env.all_transition_next
-				...
+		delta = 1e5
+		# utility function array init to 0
+		V = np.zeros(len(self.all_states))
+		# do we use this?
+		discount_factor = 1.0
+		while delta >= 0.001:
+			V_ = V.copy() # Copy the utility
+			delta = 0 # Measure the maximum change in all states for this iteration - if smaller than 0.001 we stop.
+			# iterate through states
+			for s in range(len(self.all_states)):	
+				# keep track of action utilities
+				A = np.zeros(len(self.env.available_actions(self.all_states[s])))
+				# reward
+				rew = self.giveup_reward(self.all_states[s][0])
+				# iterate through all actions
+				for a in range(len(A)):
+					# if no actions, skip and go directly to reward
+					if (len(A) == 1):
+						break
+					# calc probability of next actions
+					prob = self.env.all_transition_next(self.all_states[s][0], self.env.available_actions(self.all_states[s])[a])[a-1][1]
+					# calculate utility for each action
+					A[a] += prob * (rew + discount_factor * V_[s])
+				# if there are no actions, skip the np.max function and just use reward
+				try:
+					best_action_val = np.max(A)
+				except ValueError:
+					best_action_val = rew
+				# calc delta
+				delta = max(delta, np.abs(best_action_val - V[s]))
+				# add to utilities list
+				V[s] = best_action_val
+		# add utilities to class variable -> slow and dumb but it works
+		for u in range(len(self.utilities)):
+			state = self.all_states[u]
+			self.utilities[state] = V[u]
 
 	def policy(self, state):
 		possible_actions = self.env.available_actions(state)
@@ -101,11 +130,17 @@ class Agent:
 		# Initialize with give up directly
 		max_utility = self.giveup_reward(numbers_left)
 		best_action = []
-
-		for action in possible_actions:
+		A = np.zeros(len(self.env.available_actions(state)))
+		for a in range(len(possible_actions)):
 			# Finish this part - Find the best action with utility computed in value iteration
-			...
+			prob = self.env.all_transition_next(state[0], self.env.available_actions(state)[a])[a-1][1]
+			A[a] += prob * (max_utility + 1.0 * self.utilities[state])
 
+		best_action_val = np.max(A)
+		best_action_ind = np.where(A == best_action_val)[0]
+		for i in best_action_ind:
+			best_action.append(self.env.available_actions(state)[i])
+			
 		return best_action
 
 
@@ -115,15 +150,14 @@ if __name__=='__main__':
 	# print(env.available_actions(State([1,2,3,4,5,6,7,8,9], 12)))
 	# print(env.all_transition_next([1,2,3,4,5,6,7,8,9], [1,2]))
 
-
 	agent = Agent(env)
 	# Q1: Complete the Value iteration code here!
-	# agent.value_iteration()
-	# print('Utility of [1,2,3,4,5,6,7,8,9], 12: %.3f' % agent.utilities[State([1,2,3,4,5,6,7,8,9], 12)])
-	# print('Utility of [1,3,4,5,6,7,8,9], 12: %.3f' % agent.utilities[State([1,3,4,5,6,7,8,9], 12)])
-	# print('Utility of [1,3,5,6,7,8,9], 12: %.3f' % agent.utilities[State([1,3,5,6,7,8,9], 12)])
+	agent.value_iteration()
+	print('Utility of [1,2,3,4,5,6,7,8,9], 12: %.3f' % agent.utilities[State([1,2,3,4,5,6,7,8,9], 12)])
+	print('Utility of [1,3,4,5,6,7,8,9], 12: %.3f' % agent.utilities[State([1,3,4,5,6,7,8,9], 12)])
+	print('Utility of [1,3,5,6,7,8,9], 12: %.3f' % agent.utilities[State([1,3,5,6,7,8,9], 12)])
 	
 	# Q2: Complete policy function and run the code here!
-	# print('Optimal action of [1,2,3,4,5,6,7,8,9], 12: %s' % str(agent.policy(State([1,2,3,4,5,6,7,8,9], 12))))
-	# print('Optimal action of [1,3,4,5,6,7,8,9], 12: %s' % str(agent.policy(State([1,3,4,5,6,7,8,9], 12))))
-	# print('Optimal action of [1,3,5,6,7,8,9], 12: %s' % str(agent.policy(State([1,3,5,6,7,8,9], 12))))
+	print('Optimal action of [1,2,3,4,5,6,7,8,9], 12: %s' % str(agent.policy(State([1,2,3,4,5,6,7,8,9], 12))))
+	print('Optimal action of [1,3,4,5,6,7,8,9], 12: %s' % str(agent.policy(State([1,3,4,5,6,7,8,9], 12))))
+	print('Optimal action of [1,3,5,6,7,8,9], 12: %s' % str(agent.policy(State([1,3,5,6,7,8,9], 12))))
